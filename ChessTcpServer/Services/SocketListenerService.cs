@@ -112,7 +112,7 @@ public class SocketListenerService : BackgroundService
 
     private async Task SendResponse(Socket handler, int errorCode, string respBody, CancellationToken stoppingToken)
     {
-        // В сценариях с более сложной генерацией я бы использовал StringBuilder для оптиматьного формирования строк
+        // В сценариях с более сложной генерацией я бы использовал StringBuilder для оптимального формирования строк
         string response = 
             $"HTTP/1.1 {errorCode} OK\r\nContent-Type: application/json\r\nContent-Length: {Encoding.UTF8.GetByteCount(respBody)}\r\n\r\n{respBody}";
 
