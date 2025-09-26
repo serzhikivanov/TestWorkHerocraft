@@ -1,0 +1,26 @@
+services:
+      
+  clientmicroservice:
+    build:
+      context: .
+      dockerfile: ./ChessSrvClient/Dockerfile
+    container_name: client_service
+    restart: always
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      DOTNET_ENVIRONMENT: "Production"
+    ports:
+      - "8080:8080"
+      
+  servermicroservice:
+    build:
+      context: .
+      dockerfile: ./ChessTcpServer/Dockerfile
+    container_name: server_service
+    restart: always
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      DOTNET_ENVIRONMENT: "Production"
+    ports:
+      - "5001:5001"
+      

@@ -1,5 +1,6 @@
+using ChessSrvClient.Configuration;
 using Microsoft.AspNetCore.Mvc;
-using System.Net.Http;
+using Microsoft.Extensions.Options;
 using System.Text;
 using System.Text.Json;
 
@@ -11,11 +12,13 @@ public class ChessMoveController : ControllerBase
 {
     private readonly ILogger<ChessMoveController> _logger;
     private readonly HttpClient _httpClient;
+    private readonly IOptions<ChessClientSettings> _options;
 
-    public ChessMoveController(ILogger<ChessMoveController> logger)
+    public ChessMoveController(ILogger<ChessMoveController> logger, IOptions<ChessClientSettings> options)
     {
         _logger = logger;
         _httpClient = new HttpClient();
+        _options = options;
     }
 
     [HttpGet(Name = "GetKnightMoves")]
@@ -29,8 +32,10 @@ public class ChessMoveController : ControllerBase
 
         var json = JsonSerializer.Serialize(requestObj);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
-        var response = await _httpClient.PostAsync("http://localhost:5001/", content);
-        //var response = await _httpClient.PostAsync("http://servermicroservice:5001/", content);
+
+        _logger.LogInformation("Sending request {0} to {1}", json, _options.Value.Url);
+
+        var response = await _httpClient.PostAsync(_options.Value.Url, content);
 
         response.EnsureSuccessStatusCode();
 

@@ -1,4 +1,6 @@
-﻿using System.Net;
+﻿using ChessTcpServer.Configuration;
+using Microsoft.Extensions.Options;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
@@ -9,19 +11,20 @@ public class SocketListenerService : BackgroundService
 {
     private ILogger<SocketListenerService> _logger;
     private IKnightMoveCalcService _knightMoveCalcService;
-    private int _port = 5001;
+    private IOptions<ChessServerSettings> _options;
 
-    public SocketListenerService(ILogger<SocketListenerService> logger, IKnightMoveCalcService knightMoveCalcService)
+    public SocketListenerService(ILogger<SocketListenerService> logger, IKnightMoveCalcService knightMoveCalcService, IOptions<ChessServerSettings> options)
     {
         _logger = logger;
         _knightMoveCalcService = knightMoveCalcService;
+        _options = options;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        IPHostEntry ipHostInfo = await Dns.GetHostEntryAsync("localhost");
+        IPHostEntry ipHostInfo = await Dns.GetHostEntryAsync(_options.Value.Url);
         IPAddress ipAddress = ipHostInfo.AddressList[0];
-        IPEndPoint ipEndPoint = new(ipAddress, _port);
+        IPEndPoint ipEndPoint = new(ipAddress, int.Parse(_options.Value.Port));
 
         using (Socket listener = new(ipEndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp))
         {
@@ -32,6 +35,7 @@ public class SocketListenerService : BackgroundService
             {
                 while (!stoppingToken.IsCancellationRequested)
                 {
+                    _logger.LogInformation("Listening on {0}:{1}", _options.Value.Url, _options.Value.Port);
                     var handler = await listener.AcceptAsync(stoppingToken);
                     var jsonBody = await ReadHttpRequestBodyAsync(handler, stoppingToken);
                     _logger.LogInformation("Received JSON: {0}", jsonBody);
