@@ -1,7 +1,6 @@
-﻿namespace ChessTcpServer.Services
+﻿namespace ChessTcpServer.Services;
+
+public interface IKnightMoveCalcService
 {
-    public interface IKnightMoveCalcService
-    {
-        string[] CalcKnightPath(string startCell, string endCell);
-    }
+    string[] CalcKnightPath(string startCell, string endCell);
 }

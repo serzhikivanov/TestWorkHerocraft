@@ -32,15 +32,13 @@ public class ChessMoveController : ControllerBase
 
         var json = JsonSerializer.Serialize(requestObj);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
-
         _logger.LogInformation("Sending request {0} to {1}", json, _options.Value.Url);
 
         var response = await _httpClient.PostAsync(_options.Value.Url, content);
 
         response.EnsureSuccessStatusCode();
-
-        // Читаем строковый ответ от вашего TCP-сервера
         string responseBody = await response.Content.ReadAsStringAsync();
+        _logger.LogInformation("Received response {0}", response);
 
         return responseBody;
     }

@@ -41,22 +41,19 @@ public class SocketListenerService : BackgroundService
                     _logger.LogInformation("Received JSON: {0}", jsonBody);
 
                     var payload = JsonSerializer.Deserialize<KnightRequest>(jsonBody);
-
-                    // ToDo: handle errors here
-
                     string[]? knightMovePath = _knightMoveCalcService.CalcKnightPath(payload.from, payload.to);
                     var respBody = JsonSerializer.Serialize(knightMovePath);
                     _logger.LogInformation("Serialized response: {0}", respBody);
                     await SendResponse(handler, 200, respBody, stoppingToken);
 
-                    // В этом упрощенном случае keep-alive не нужен, закрываю соединение
+                    // В этом простом сценарии keep-alive не нужен, закрываю соединение
                     handler.Shutdown(SocketShutdown.Both);
                     handler.Close();
                 }
             }
             catch (OperationCanceledException)
             {
-                // Normal shutdown
+                // Штатное завершение
             }
             catch (Exception ex)
             {
@@ -120,14 +117,10 @@ public class SocketListenerService : BackgroundService
 
     private async Task SendResponse(Socket handler, int errorCode, string respBody, CancellationToken stoppingToken)
     {
-        string response =
-            "HTTP/1.1 200 OK\r\n" +
-            "Content-Type: application/json\r\n" +
-            $"Content-Length: {Encoding.UTF8.GetByteCount(respBody)}\r\n" + 
-            "\r\n" +                                      
-            respBody;
+        // В сценариях с более сложной генерацией я бы использовал StringBuilder для оптиматьного формирования строк
+        string response = 
+            $"HTTP/1.1 {errorCode} OK\r\nContent-Type: application/json\r\nContent-Length: {Encoding.UTF8.GetByteCount(respBody)}\r\n\r\n{respBody}";
 
-        // Convert to bytes and send
         byte[] responseBytes = Encoding.UTF8.GetBytes(response);
         await handler.SendAsync(responseBytes, SocketFlags.None, stoppingToken);
     }
