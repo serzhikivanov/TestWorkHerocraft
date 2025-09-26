@@ -1,7 +1,7 @@
-﻿using ChessTcpSrv.Services;
+﻿using ChessTcpServer.Services;
 using NUnit.Framework;
 
-namespace ChessTcpSrv.UnitTests
+namespace ChessTcpServer.UnitTests
 {
     [TestFixture]
     public class KnightMoveCalcServiceTests

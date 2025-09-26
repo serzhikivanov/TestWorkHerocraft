@@ -1,6 +1,6 @@
-﻿namespace ChessTcpSrv.Services
+﻿namespace ChessTcpServer.Services
 {
-    internal class KnightMoveCalcService
+    public class KnightMoveCalcService: IKnightMoveCalcService
     {
         // Все возможные ходы коня по координатам (x,y)
         private static readonly (int dx, int dy)[] KnightMoves = new (int, int)[]

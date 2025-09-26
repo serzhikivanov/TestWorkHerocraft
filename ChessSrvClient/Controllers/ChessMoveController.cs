@@ -1,4 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
 
 namespace ChessSrvClient.Controllers;
 
@@ -7,17 +10,33 @@ namespace ChessSrvClient.Controllers;
 public class ChessMoveController : ControllerBase
 {
     private readonly ILogger<ChessMoveController> _logger;
+    private readonly HttpClient _httpClient;
 
     public ChessMoveController(ILogger<ChessMoveController> logger)
     {
-        // Мне нравится у конструкторов классический вид со скобками, хотя в случае 1 строки логики можно
-        // сделать и "public ChessMoveController(ILogger<ChessMoveController> logger) => _logger = logger;"
         _logger = logger;
+        _httpClient = new HttpClient();
     }
 
-    [HttpGet(Name = "GetHorseMoves")]
-    public string Get([FromQuery] string startCell, [FromQuery] string endCell)
+    [HttpGet(Name = "GetKnightMoves")]
+    public async Task<string> Get([FromQuery] string startCell, [FromQuery] string endCell)
     {
-        return "[Sample return]";
+        var requestObj = new
+        {
+            from = startCell,
+            to = endCell
+        };
+
+        var json = JsonSerializer.Serialize(requestObj);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        var response = await _httpClient.PostAsync("http://localhost:5001/", content);
+        //var response = await _httpClient.PostAsync("http://servermicroservice:5001/", content);
+
+        response.EnsureSuccessStatusCode();
+
+        // Читаем строковый ответ от вашего TCP-сервера
+        string responseBody = await response.Content.ReadAsStringAsync();
+
+        return responseBody;
     }
 }
