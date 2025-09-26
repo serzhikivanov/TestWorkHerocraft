@@ -72,7 +72,6 @@ public class SocketListenerService : BackgroundService
         var bodyBuffer = new List<byte>();
         var temp = new byte[1024];
 
-        // Step 1: read headers until we see "\r\n\r\n"
         while (true)
         {
             int bytes = await handler.ReceiveAsync(temp, SocketFlags.None, ct);
@@ -84,9 +83,7 @@ public class SocketListenerService : BackgroundService
             int headerEnd = headerText.IndexOf("\r\n\r\n", StringComparison.Ordinal);
             if (headerEnd >= 0)
             {
-                // we found the end of headers
                 string headersOnly = headerText[..headerEnd];
-                // parse Content-Length
                 int contentLength = 0;
                 foreach (var line in headersOnly.Split("\r\n"))
                 {
@@ -97,12 +94,10 @@ public class SocketListenerService : BackgroundService
                     }
                 }
 
-                // Step 2: figure out if we already received part of the body
                 int alreadyRead = headerBuffer.Count - (headerEnd + 4);
                 if (alreadyRead > 0)
                     bodyBuffer.AddRange(headerBuffer.GetRange(headerEnd + 4, alreadyRead));
 
-                // Step 3: read remaining body bytes if needed
                 while (bodyBuffer.Count < contentLength)
                 {
                     bytes = await handler.ReceiveAsync(temp, SocketFlags.None, ct);
