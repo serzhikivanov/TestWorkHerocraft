@@ -4,16 +4,16 @@ using System.Text.Json;
 
 namespace ChessTcpServer.Parsers;
 
-public class ChessParserHttp : IChessParser<KnightRequest>
+public class ChessParserHttp<T> : IChessParser<T>
 {
-    public KnightRequest ParseRequest(string source)
+    public T ParseRequest(string source)
     {
         var idx = source.IndexOf("\r\n\r\n", StringComparison.Ordinal);
         if (idx < 0) 
             throw new InvalidOperationException("Bad HTTP request");
 
         var body = source[(idx + 4)..];
-        return JsonSerializer.Deserialize<KnightRequest>(body)!;
+        return JsonSerializer.Deserialize<T>(body)!;
     }
 
     public string ParseResponse(string source)

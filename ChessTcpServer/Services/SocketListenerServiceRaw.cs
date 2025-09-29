@@ -11,7 +11,7 @@ public class SocketListenerServiceRaw : SocketListenerService
         IKnightMoveCalcService calcService,
         IOptions<ChessServerSettings> options)
         : base(logger, calcService, options,
-               new ChessParserRaw(),
+               new ChessParserRaw<KnightRequest>(),
                options.Value.UrlRaw,
                int.Parse(options.Value.PortRaw))
     { }

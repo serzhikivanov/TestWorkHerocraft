@@ -11,7 +11,7 @@ public class SocketListenerServiceHttp : SocketListenerService
         IKnightMoveCalcService calcService,
         IOptions<ChessServerSettings> options)
         : base(logger, calcService, options,
-               new ChessParserHttp(),
+               new ChessParserHttp<KnightRequest>(),
                options.Value.Url,
                int.Parse(options.Value.Port))
     { }
