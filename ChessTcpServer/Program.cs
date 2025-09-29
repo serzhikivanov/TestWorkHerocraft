@@ -10,7 +10,8 @@ var host = Host.CreateDefaultBuilder(args)
             context.Configuration.GetSection("ChessServerSettings"));
 
         services.AddTransient<IKnightMoveCalcService, KnightMoveCalcService>();
-        services.AddHostedService<SocketListenerService>();
+        services.AddHostedService<SocketListenerServiceHttp>();
+        services.AddHostedService<SocketListenerServiceRaw>();
     })
     .Build();
 

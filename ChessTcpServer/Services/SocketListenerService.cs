@@ -1,4 +1,5 @@
 ﻿using ChessTcpServer.Configuration;
+using ChessTcpServer.Parsers;
 using Microsoft.Extensions.Options;
 using System.Net;
 using System.Net.Sockets;
@@ -7,117 +8,88 @@ using System.Text.Json;
 
 namespace ChessTcpServer.Services;
 
-public class SocketListenerService : BackgroundService
+public abstract class SocketListenerService : BackgroundService
 {
-    private ILogger<SocketListenerService> _logger;
-    private IKnightMoveCalcService _knightMoveCalcService;
-    private IOptions<ChessServerSettings> _options;
+    private readonly ILogger<SocketListenerService> _logger;
+    private readonly IKnightMoveCalcService _calcService;
+    private readonly IOptions<ChessServerSettings> _options;
+    private readonly IChessParser<KnightRequest> _parser;
+    private readonly string _url;
+    private readonly int _port;
 
-    public SocketListenerService(ILogger<SocketListenerService> logger, IKnightMoveCalcService knightMoveCalcService, IOptions<ChessServerSettings> options)
+    protected SocketListenerService(
+        ILogger<SocketListenerService> logger,
+        IKnightMoveCalcService calcService,
+        IOptions<ChessServerSettings> options,
+        IChessParser<KnightRequest> parser,
+        string url,
+        int port)
     {
         _logger = logger;
-        _knightMoveCalcService = knightMoveCalcService;
+        _calcService = calcService;
         _options = options;
+        _parser = parser;
+        _url = url;
+        _port = port;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        IPHostEntry ipHostInfo = await Dns.GetHostEntryAsync(_options.Value.Url);
+        IPHostEntry ipHostInfo = await Dns.GetHostEntryAsync(_url);
         IPAddress ipAddress = ipHostInfo.AddressList[0];
-        IPEndPoint ipEndPoint = new(ipAddress, int.Parse(_options.Value.Port));
+        IPEndPoint ipEndPoint = new(ipAddress, _port);
 
-        using (Socket listener = new(ipEndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp))
+        using var listener = new Socket(ipEndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+        listener.Bind(ipEndPoint);
+        listener.Listen(100);
+
+        try
         {
-            listener.Bind(ipEndPoint);
-            listener.Listen(100);
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                _logger.LogInformation("Listening on {0}:{1}", _url, _port);
+                var handler = await listener.AcceptAsync(stoppingToken);
+                string request = await ReadAllAsync(handler, stoppingToken);
+                _logger.LogInformation("Received: {0}", request);
+                var payload = _parser.ParseRequest(request);
 
-            try
-            {
-                while (!stoppingToken.IsCancellationRequested)
-                {
-                    _logger.LogInformation("Listening on {0}:{1}", _options.Value.Url, _options.Value.Port);
-                    var handler = await listener.AcceptAsync(stoppingToken);
-                    var jsonBody = await ReadHttpRequestBodyAsync(handler, stoppingToken);
-                    _logger.LogInformation("Received JSON: {0}", jsonBody);
+                var moves = _calcService.CalcKnightPath(payload.from, payload.to);
+                var jsonResp = JsonSerializer.Serialize(moves);
+                string responseText = _parser.ParseResponse(jsonResp);
+                await handler.SendAsync(Encoding.UTF8.GetBytes(responseText), SocketFlags.None, stoppingToken);
 
-                    var payload = JsonSerializer.Deserialize<KnightRequest>(jsonBody);
-                    string[]? knightMovePath = _knightMoveCalcService.CalcKnightPath(payload.from, payload.to);
-                    var respBody = JsonSerializer.Serialize(knightMovePath);
-                    _logger.LogInformation("Serialized response: {0}", respBody);
-                    await SendResponse(handler, 200, respBody, stoppingToken);
-
-                    // В этом простом сценарии keep-alive не нужен, закрываю соединение
-                    handler.Shutdown(SocketShutdown.Both);
-                    handler.Close();
-                }
+                handler.Shutdown(SocketShutdown.Both);
+                handler.Close();
             }
-            catch (OperationCanceledException)
-            {
-                // Штатное завершение
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "TCP listener failed");
-            }
-            finally
-            {
-                _logger.LogInformation("TCP server stopped");
-            }
+        }
+        catch (OperationCanceledException) 
+        { 
+            /* нормальное завершение */ 
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "TCP listener failed");
+        }
+        finally
+        {
+            _logger.LogInformation("TCP server stopped");
         }
     }
 
-    private async Task<string> ReadHttpRequestBodyAsync(Socket handler, CancellationToken ct)
+    private static async Task<string> ReadAllAsync(Socket handler, CancellationToken ct)
     {
-        var headerBuffer = new List<byte>();
-        var bodyBuffer = new List<byte>();
-        var temp = new byte[1024];
-
+        var buffer = new byte[4096];
+        var sb = new StringBuilder();
         while (true)
         {
-            int bytes = await handler.ReceiveAsync(temp, SocketFlags.None, ct);
-            if (bytes == 0) throw new Exception("Client disconnected");
-
-            headerBuffer.AddRange(temp[..bytes]);
-            string headerText = Encoding.UTF8.GetString(headerBuffer.ToArray());
-
-            int headerEnd = headerText.IndexOf("\r\n\r\n", StringComparison.Ordinal);
-            if (headerEnd >= 0)
-            {
-                string headersOnly = headerText[..headerEnd];
-                int contentLength = 0;
-                foreach (var line in headersOnly.Split("\r\n"))
-                {
-                    if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var parts = line.Split(':', 2);
-                        contentLength = int.Parse(parts[1].Trim());
-                    }
-                }
-
-                int alreadyRead = headerBuffer.Count - (headerEnd + 4);
-                if (alreadyRead > 0)
-                    bodyBuffer.AddRange(headerBuffer.GetRange(headerEnd + 4, alreadyRead));
-
-                while (bodyBuffer.Count < contentLength)
-                {
-                    bytes = await handler.ReceiveAsync(temp, SocketFlags.None, ct);
-                    if (bytes == 0) break;
-                    bodyBuffer.AddRange(temp[..bytes]);
-                }
-
-                return Encoding.UTF8.GetString(bodyBuffer.ToArray());
-            }
+            int bytes = await handler.ReceiveAsync(buffer, SocketFlags.None, ct);
+            if (bytes == 0) break;
+            sb.Append(Encoding.UTF8.GetString(buffer, 0, bytes));
+            // реализация в парсере не требует знать Content-Length заранее
+            if (!handler.Poll(10_000, SelectMode.SelectRead))
+                break;
         }
-    }
-
-    private async Task SendResponse(Socket handler, int errorCode, string respBody, CancellationToken stoppingToken)
-    {
-        // В сценариях с более сложной генерацией я бы использовал StringBuilder для оптимального формирования строк
-        string response = 
-            $"HTTP/1.1 {errorCode} OK\r\nContent-Type: application/json\r\nContent-Length: {Encoding.UTF8.GetByteCount(respBody)}\r\n\r\n{respBody}";
-
-        byte[] responseBytes = Encoding.UTF8.GetBytes(response);
-        await handler.SendAsync(responseBytes, SocketFlags.None, stoppingToken);
+        return sb.ToString();
     }
 }
 
